@@ -20,27 +20,26 @@
   .btn-save{width:100%;margin-top:14px;color:#fff;background:#2b7a2b}
   .btn-save:disabled{background:#9bbf9b}
   .btn-cancel{width:100%;margin-top:8px;color:#555;background:#e6e8ea}
+  .btn-del{width:100%;margin-top:8px;color:#fff;background:#c0392b}
   .topbar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
-  .topbar select{flex:1}
+  .topbar select{flex:1;font-weight:700}
   .icon{width:46px;flex:0 0 46px;background:#e6e8ea;color:#333;font-size:18px;padding:11px 0}
   .totals{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
   .tot{flex:1 1 46%;background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .tot .k{font-size:12px;color:#6b7280}.tot .v{font-size:18px;font-weight:700;margin-top:2px}
   .tot .v.neg{color:#d23}.tot .v.pos{color:#2b7a2b}
-  .item{background:#fff;border-radius:12px;padding:11px 13px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
-  .item .top{display:flex;justify-content:space-between;align-items:center}
-  .item .d{font-weight:700;font-size:15px}
-  .item .b{font-weight:700}.item .b.neg{color:#d23}.item .b.pos{color:#2b7a2b}
-  .item .sub{color:#6b7280;font-size:13px;margin-top:4px}
-  .item .ops{margin-top:8px;display:flex;gap:8px}
-  .item .ops button{flex:1;font-size:14px;padding:8px;background:#f1f2f4;color:#444}
-  .item .ops .del{color:#d23}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  th,td{padding:9px 8px;text-align:right;font-size:14px;border-bottom:1px solid #f0f1f3}
+  th{background:#f6f7f9;color:#555;font-size:12px;position:sticky;top:0}
+  td.day,th.day{text-align:left;font-weight:700;white-space:nowrap}
+  tbody tr:active{background:#eef3ff}
+  td.neg{color:#d23;font-weight:700}td.pos{color:#2b7a2b;font-weight:700}
   .muted{color:#6b7280;font-size:13px;line-height:1.6}
   .link{color:#2b57c9;text-decoration:none;font-weight:700}
   .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:90%;background:#333;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;text-align:center}
   .toast.show{opacity:1}.toast.err{background:#c0392b}
   .step{margin:8px 0;padding-left:4px}
-  hr{border:none;border-top:1px solid #eee;margin:14px 0}
+  .hint{font-size:12px;color:#8a929c;text-align:center;margin:8px 0}
 </style>
 </head>
 <body>
@@ -82,12 +81,17 @@
     <input id="f_note" type="text" placeholder="可留空">
     <div class="balance" id="f_balance">結餘：0</div>
     <button class="btn-save" id="saveBtn" onclick="submitForm()">儲存</button>
-    <button class="btn-cancel" id="cancelBtn" hidden onclick="clearForm()">取消修改</button>
+    <button class="btn-del" id="delBtn" hidden onclick="delCurrent()">刪除這一筆</button>
+    <button class="btn-cancel" id="cancelBtn" hidden onclick="clearForm()">取消</button>
   </div>
 
-  <div id="list"></div>
+  <div class="hint">👇 這個月每一天（點任何一列可以修改）</div>
+  <table>
+    <thead><tr><th class="day">日期</th><th>收入</th><th>平台</th><th>支出</th><th>結餘</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
 
-  <button class="btn-cancel" style="background:#dfe3e6" onclick="exportCsv()">⬇️ 匯出這個月成 CSV</button>
+  <button class="btn-cancel" style="background:#dfe3e6;margin-top:12px" onclick="exportCsv()">⬇️ 匯出這個月成 CSV</button>
 </section>
 
 <div class="toast" id="toast"></div>
@@ -100,13 +104,13 @@ let gistId=localStorage.getItem('mb_gist')||'';
 let data=[];
 let editingId=null;
 
-// 公開頁面不放任何金額；11 月資料會灌進你自己的私人 Gist
-const SEED=[];
+const SEED=[]; // 資料都在你自己的私人 Gist
 
 const $=id=>document.getElementById(id);
 const num=v=>{const n=Number(v);return isNaN(n)?0:n;};
 const money=n=>(Number(n)||0).toLocaleString();
 const monthOf=d=>String(d).slice(0,7);
+const mdOf=d=>String(d).slice(5).replace('-','/');
 
 let toastT=null;
 function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');clearTimeout(toastT);toastT=setTimeout(()=>t.className='toast',err?3500:1800);}
@@ -160,7 +164,7 @@ function openMenu(){
 async function boot(){
   if(!token){$('setup').hidden=false;$('main').hidden=true;return;}
   $('setup').hidden=true;$('main').hidden=false;
-  const today=new Date();const ts=today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
+  const t=new Date();const ts=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
   $('f_date').value=ts;
   toast('讀取中…');
   try{
@@ -187,33 +191,31 @@ function buildMonths(preferred){
 
 function render(){
   const m=$('month').value;
-  const rows=data.filter(r=>monthOf(r.date)===m).sort((a,b)=>a.date<b.date?1:-1);
+  const rows=data.filter(r=>monthOf(r.date)===m).sort((a,b)=>a.date<b.date?-1:1);
   let ti=0,tp=0,te=0;
-  data.filter(r=>monthOf(r.date)===m).forEach(r=>{ti+=num(r.income);tp+=num(r.platform);te+=num(r.expense);});
+  rows.forEach(r=>{ti+=num(r.income);tp+=num(r.platform);te+=num(r.expense);});
   const bal=ti-te;
   $('totals').innerHTML=
     tt('收入合計',money(ti),'pos')+tt('支出合計',money(te),'neg')+
     tt('平台合計',money(tp),'pos')+tt('結餘 (收入-支出)',money(bal),bal<0?'neg':'pos');
-  $('list').innerHTML=rows.length?rows.map(r=>{
+  $('tbody').innerHTML=rows.length?rows.map(r=>{
     const b=num(r.income)-num(r.expense);
-    const sub=[];if(r.income)sub.push('收入 '+money(r.income));if(r.platform)sub.push('平台 '+money(r.platform));if(r.expense)sub.push('支出 '+money(r.expense));if(r.note)sub.push(r.note);
-    return '<div class="item"><div class="top"><span class="d">'+r.date+'</span>'+
-      '<span class="b '+(b<0?'neg':'pos')+'">'+money(b)+'</span></div>'+
-      '<div class="sub">'+(sub.join('　')||'—')+'</div>'+
-      '<div class="ops"><button onclick="editRec(\''+r.id+'\')">修改</button>'+
-      '<button class="del" onclick="delRec(\''+r.id+'\')">刪除</button></div></div>';
-  }).join(''):'<div class="item muted">這個月還沒有紀錄</div>';
+    const cell=v=>v?money(v):'';
+    return '<tr onclick="editRec(\''+r.id+'\')"><td class="day">'+mdOf(r.date)+'</td>'+
+      '<td>'+cell(r.income)+'</td><td>'+cell(r.platform)+'</td><td>'+cell(r.expense)+'</td>'+
+      '<td class="'+(b<0?'neg':'pos')+'">'+money(b)+'</td></tr>';
+  }).join(''):'<tr><td colspan="5" class="muted" style="text-align:center;padding:16px">這個月還沒有紀錄</td></tr>';
 }
 function tt(k,v,cls){return '<div class="tot"><div class="k">'+k+'</div><div class="v '+cls+'">'+v+'</div></div>';}
 
 function updateBalance(){$('f_balance').textContent='結餘：'+money(num($('f_income').value)-num($('f_expense').value));}
-['f_income','f_expense'].forEach(id=>document.addEventListener('input',e=>{if(e.target.id===id)updateBalance();}));
+document.addEventListener('input',e=>{if(e.target.id==='f_income'||e.target.id==='f_expense')updateBalance();});
 
 function clearForm(){
   editingId=null;
   ['f_income','f_platform','f_expense','f_note'].forEach(id=>$(id).value='');
-  $('formTitle').textContent='新增一筆';$('saveBtn').textContent='儲存';$('cancelBtn').hidden=true;
-  updateBalance();
+  $('formTitle').textContent='新增一筆';$('saveBtn').textContent='儲存';
+  $('cancelBtn').hidden=true;$('delBtn').hidden=true;updateBalance();
 }
 
 function editRec(id){
@@ -221,15 +223,17 @@ function editRec(id){
   editingId=id;
   $('f_date').value=r.date;$('f_income').value=r.income||'';$('f_platform').value=r.platform||'';
   $('f_expense').value=r.expense||'';$('f_note').value=r.note||'';
-  $('formTitle').textContent='修改這一筆';$('saveBtn').textContent='更新';$('cancelBtn').hidden=false;
-  updateBalance();window.scrollTo({top:0,behavior:'smooth'});
+  $('formTitle').textContent='修改 '+r.date;$('saveBtn').textContent='更新';
+  $('cancelBtn').hidden=false;$('delBtn').hidden=false;updateBalance();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
-async function delRec(id){
+async function delCurrent(){
+  if(!editingId)return;
   if(!confirm('確定刪除這一筆？'))return;
-  data=data.filter(r=>r.id!==id);
+  const id=editingId;data=data.filter(r=>r.id!==id);
   localStorage.setItem('mb_cache',JSON.stringify(data));
-  buildMonths($('month').value);render();
+  clearForm();buildMonths($('month').value);render();
   try{await saveGist();toast('已刪除並上傳 ✓');}catch(e){toast('已刪本機，上傳失敗：'+e.message,true);}
 }
 
@@ -237,7 +241,11 @@ async function submitForm(){
   const rec={date:$('f_date').value,income:num($('f_income').value),platform:num($('f_platform').value),expense:num($('f_expense').value),note:$('f_note').value.trim()};
   if(!rec.date){toast('請先選日期',true);return;}
   if(editingId){const i=data.findIndex(r=>r.id===editingId);if(i>=0)data[i]={...data[i],...rec};}
-  else{rec.id='r'+Date.now()+Math.floor(Math.random()*1000);data.push(rec);}
+  else{
+    const dup=data.find(r=>r.date===rec.date);
+    if(dup&&!confirm(rec.date+' 已經有一筆了，還要再加一筆嗎？\n(想改的話請點下面表格那一列)'))return;
+    rec.id='r'+Date.now()+Math.floor(Math.random()*1000);data.push(rec);
+  }
   data.sort((a,b)=>a.date<b.date?-1:1);
   localStorage.setItem('mb_cache',JSON.stringify(data));
   const wasEdit=!!editingId;clearForm();buildMonths(monthOf(rec.date));$('month').value=monthOf(rec.date);render();
