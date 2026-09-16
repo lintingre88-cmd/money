@@ -8,15 +8,15 @@
 <title>收支記帳</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{overflow-x:hidden;max-width:100%}
   body{margin:0;font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;background:#eef0f2;color:#1f2329;padding:12px 12px 60px}
   h1{font-size:19px;margin:2px 0 12px;text-align:center}
   .card{background:#fff;border-radius:14px;padding:15px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:12px}
   label{display:block;font-size:14px;font-weight:600;margin:10px 0 5px;color:#333}
   input,select{width:100%;font-size:19px;padding:11px 13px;border:1px solid #d5d8dd;border-radius:10px;background:#fafbfc}
   input:focus,select:focus{outline:none;border-color:#3b7cff;background:#fff}
-  input[type="date"]{text-align:center;min-height:48px;line-height:normal}
+  input[type="date"]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;text-align:center;min-height:48px;line-height:normal}
   input[type="date"]::-webkit-date-and-time-value{text-align:center}
-  input[type="date"]::-webkit-datetime-edit{text-align:center}
   .row2{display:flex;gap:10px}.row2>div{flex:1}
   .balance{margin-top:12px;font-size:17px;text-align:center;font-weight:700;padding:10px;border-radius:10px;background:#eef3ff;color:#2b57c9}
   button{font-size:18px;font-weight:700;border:none;border-radius:11px;padding:13px;cursor:pointer}
