@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2b7a2b">
+<title>收支記帳</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;background:#eef0f2;color:#1f2329;padding:12px 12px 60px}
+  h1{font-size:19px;margin:2px 0 12px;text-align:center}
+  .card{background:#fff;border-radius:14px;padding:15px;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:12px}
+  label{display:block;font-size:14px;font-weight:600;margin:10px 0 5px;color:#333}
+  input,select{width:100%;font-size:19px;padding:11px 13px;border:1px solid #d5d8dd;border-radius:10px;background:#fafbfc}
+  input:focus,select:focus{outline:none;border-color:#3b7cff;background:#fff}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .balance{margin-top:12px;font-size:17px;text-align:center;font-weight:700;padding:10px;border-radius:10px;background:#eef3ff;color:#2b57c9}
+  button{font-size:18px;font-weight:700;border:none;border-radius:11px;padding:13px;cursor:pointer}
+  .btn-save{width:100%;margin-top:14px;color:#fff;background:#2b7a2b}
+  .btn-save:disabled{background:#9bbf9b}
+  .btn-cancel{width:100%;margin-top:8px;color:#555;background:#e6e8ea}
+  .topbar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+  .topbar select{flex:1}
+  .icon{width:46px;flex:0 0 46px;background:#e6e8ea;color:#333;font-size:18px;padding:11px 0}
+  .totals{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .tot{flex:1 1 46%;background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .tot .k{font-size:12px;color:#6b7280}.tot .v{font-size:18px;font-weight:700;margin-top:2px}
+  .tot .v.neg{color:#d23}.tot .v.pos{color:#2b7a2b}
+  .item{background:#fff;border-radius:12px;padding:11px 13px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .item .top{display:flex;justify-content:space-between;align-items:center}
+  .item .d{font-weight:700;font-size:15px}
+  .item .b{font-weight:700}.item .b.neg{color:#d23}.item .b.pos{color:#2b7a2b}
+  .item .sub{color:#6b7280;font-size:13px;margin-top:4px}
+  .item .ops{margin-top:8px;display:flex;gap:8px}
+  .item .ops button{flex:1;font-size:14px;padding:8px;background:#f1f2f4;color:#444}
+  .item .ops .del{color:#d23}
+  .muted{color:#6b7280;font-size:13px;line-height:1.6}
+  .link{color:#2b57c9;text-decoration:none;font-weight:700}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:90%;background:#333;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;text-align:center}
+  .toast.show{opacity:1}.toast.err{background:#c0392b}
+  .step{margin:8px 0;padding-left:4px}
+  hr{border:none;border-top:1px solid #eee;margin:14px 0}
+</style>
+</head>
+<body>
+<h1>收支記帳</h1>
+
+<!-- ===== 首次設定畫面 ===== -->
+<section id="setup" hidden>
+  <div class="card">
+    <p class="muted">第一次使用要貼一把「鑰匙」，之後這支手機就不用再貼了。</p>
+    <div class="step muted">1. 先點下面連結，登入你自己的 GitHub，畫面最下面按綠色的 <b>Generate token</b>（權限已幫你設好，只有 gist）。</div>
+    <a class="link" id="tokenLink" href="https://github.com/settings/tokens/new?scopes=gist&description=收支記帳app" target="_blank" rel="noopener">👉 點我產生鑰匙</a>
+    <div class="step muted" style="margin-top:10px">2. 產生後會出現一串以 <b>ghp_</b> 開頭的字，整串複製起來，貼到下面：</div>
+    <input id="tok" type="text" placeholder="貼上 ghp_ 開頭那串" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button class="btn-save" onclick="saveToken()">完成，開始使用</button>
+    <p class="muted" style="margin-top:12px">這把鑰匙只存在你這支手機，不會上傳到網頁。你隨時可以到 GitHub 設定裡把它刪掉。</p>
+  </div>
+</section>
+
+<!-- ===== 主畫面 ===== -->
+<section id="main" hidden>
+  <div class="topbar">
+    <select id="month" onchange="render()"></select>
+    <button class="icon" title="設定" onclick="openMenu()">⚙️</button>
+  </div>
+
+  <div class="totals" id="totals"></div>
+
+  <div class="card">
+    <div id="formTitle" style="font-weight:700;margin-bottom:2px">新增一筆</div>
+    <label>日期</label>
+    <input id="f_date" type="date">
+    <div class="row2">
+      <div><label>收入</label><input id="f_income" type="number" inputmode="numeric" placeholder="0"></div>
+      <div><label>平台</label><input id="f_platform" type="number" inputmode="numeric" placeholder="0"></div>
+    </div>
+    <label>支出</label>
+    <input id="f_expense" type="number" inputmode="numeric" placeholder="0">
+    <label>備註</label>
+    <input id="f_note" type="text" placeholder="可留空">
+    <div class="balance" id="f_balance">結餘：0</div>
+    <button class="btn-save" id="saveBtn" onclick="submitForm()">儲存</button>
+    <button class="btn-cancel" id="cancelBtn" hidden onclick="clearForm()">取消修改</button>
+  </div>
+
+  <div id="list"></div>
+
+  <button class="btn-cancel" style="background:#dfe3e6" onclick="exportCsv()">⬇️ 匯出這個月成 CSV</button>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API='https://api.github.com';
+const FILE='moneybook-data.json';
+let token=localStorage.getItem('mb_token')||'';
+let gistId=localStorage.getItem('mb_gist')||'';
+let data=[];
+let editingId=null;
+
+// 公開頁面不放任何金額；11 月資料會灌進你自己的私人 Gist
+const SEED=[];
+
+const $=id=>document.getElementById(id);
+const num=v=>{const n=Number(v);return isNaN(n)?0:n;};
+const money=n=>(Number(n)||0).toLocaleString();
+const monthOf=d=>String(d).slice(0,7);
+
+let toastT=null;
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className='toast show'+(err?' err':'');clearTimeout(toastT);toastT=setTimeout(()=>t.className='toast',err?3500:1800);}
+
+async function gh(path,opts){
+  opts=opts||{};
+  const r=await fetch(API+path,{...opts,headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github+json',...(opts.headers||{})}});
+  if(r.status===401)throw new Error('鑰匙無效或過期(401)');
+  if(!r.ok)throw new Error(r.status+' '+(await r.text()).slice(0,100));
+  return r.status===204?null:r.json();
+}
+
+async function findOrCreateGist(){
+  if(gistId){try{return await gh('/gists/'+gistId);}catch(e){if(String(e).includes('401'))throw e;gistId='';}}
+  const list=await gh('/gists?per_page=100');
+  const found=list.find(g=>g.files&&g.files[FILE]);
+  if(found){gistId=found.id;localStorage.setItem('mb_gist',gistId);return await gh('/gists/'+gistId);}
+  const body={description:'收支記帳資料 (moneybook)',public:false,files:{}};
+  body.files[FILE]={content:JSON.stringify({records:SEED},null,2)};
+  const g=await gh('/gists',{method:'POST',body:JSON.stringify(body)});
+  gistId=g.id;localStorage.setItem('mb_gist',gistId);return g;
+}
+
+async function readGist(g){
+  const f=g.files[FILE];let content=f.content;
+  if(f.truncated){content=await (await fetch(f.raw_url)).text();}
+  try{return (JSON.parse(content).records)||[];}catch(e){return [];}
+}
+
+async function saveGist(){
+  const body={files:{}};
+  body.files[FILE]={content:JSON.stringify({records:data},null,2)};
+  await gh('/gists/'+gistId,{method:'PATCH',body:JSON.stringify(body)});
+}
+
+function saveToken(){
+  const v=$('tok').value.trim();
+  if(!v){toast('請先貼上鑰匙',true);return;}
+  token=v;localStorage.setItem('mb_token',v);boot();
+}
+
+function logout(){
+  localStorage.removeItem('mb_token');localStorage.removeItem('mb_gist');
+  token='';gistId='';data=[];$('main').hidden=true;$('setup').hidden=false;
+}
+
+function openMenu(){
+  if(confirm('要清除這支手機上的鑰匙、重新設定嗎？\n(你的資料在 GitHub 上不會不見)')) logout();
+}
+
+async function boot(){
+  if(!token){$('setup').hidden=false;$('main').hidden=true;return;}
+  $('setup').hidden=true;$('main').hidden=false;
+  const today=new Date();const ts=today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
+  $('f_date').value=ts;
+  toast('讀取中…');
+  try{
+    const g=await findOrCreateGist();
+    data=await readGist(g);
+    localStorage.setItem('mb_cache',JSON.stringify(data));
+    buildMonths(monthOf(ts));render();toast('已同步 ✓');
+  }catch(e){
+    if(String(e).includes('401')){toast('鑰匙無效，請重新設定',true);return logout();}
+    const c=localStorage.getItem('mb_cache');
+    if(c){data=JSON.parse(c);buildMonths(monthOf(ts));render();toast('目前離線，先看舊資料：'+e.message,true);}
+    else toast('連線失敗：'+e.message,true);
+  }
+}
+
+function buildMonths(preferred){
+  const set=new Set(data.map(r=>monthOf(r.date)));
+  if(preferred)set.add(preferred);
+  const months=[...set].sort().reverse();
+  const sel=$('month');const cur=sel.value;
+  sel.innerHTML=months.map(m=>'<option value="'+m+'">'+m.replace('-','年')+'月</option>').join('');
+  sel.value=(cur&&months.includes(cur))?cur:(preferred&&months.includes(preferred)?preferred:months[0]);
+}
+
+function render(){
+  const m=$('month').value;
+  const rows=data.filter(r=>monthOf(r.date)===m).sort((a,b)=>a.date<b.date?1:-1);
+  let ti=0,tp=0,te=0;
+  data.filter(r=>monthOf(r.date)===m).forEach(r=>{ti+=num(r.income);tp+=num(r.platform);te+=num(r.expense);});
+  const bal=ti-te;
+  $('totals').innerHTML=
+    tt('收入合計',money(ti),'pos')+tt('支出合計',money(te),'neg')+
+    tt('平台合計',money(tp),'pos')+tt('結餘 (收入-支出)',money(bal),bal<0?'neg':'pos');
+  $('list').innerHTML=rows.length?rows.map(r=>{
+    const b=num(r.income)-num(r.expense);
+    const sub=[];if(r.income)sub.push('收入 '+money(r.income));if(r.platform)sub.push('平台 '+money(r.platform));if(r.expense)sub.push('支出 '+money(r.expense));if(r.note)sub.push(r.note);
+    return '<div class="item"><div class="top"><span class="d">'+r.date+'</span>'+
+      '<span class="b '+(b<0?'neg':'pos')+'">'+money(b)+'</span></div>'+
+      '<div class="sub">'+(sub.join('　')||'—')+'</div>'+
+      '<div class="ops"><button onclick="editRec(\''+r.id+'\')">修改</button>'+
+      '<button class="del" onclick="delRec(\''+r.id+'\')">刪除</button></div></div>';
+  }).join(''):'<div class="item muted">這個月還沒有紀錄</div>';
+}
+function tt(k,v,cls){return '<div class="tot"><div class="k">'+k+'</div><div class="v '+cls+'">'+v+'</div></div>';}
+
+function updateBalance(){$('f_balance').textContent='結餘：'+money(num($('f_income').value)-num($('f_expense').value));}
+['f_income','f_expense'].forEach(id=>document.addEventListener('input',e=>{if(e.target.id===id)updateBalance();}));
+
+function clearForm(){
+  editingId=null;
+  ['f_income','f_platform','f_expense','f_note'].forEach(id=>$(id).value='');
+  $('formTitle').textContent='新增一筆';$('saveBtn').textContent='儲存';$('cancelBtn').hidden=true;
+  updateBalance();
+}
+
+function editRec(id){
+  const r=data.find(x=>x.id===id);if(!r)return;
+  editingId=id;
+  $('f_date').value=r.date;$('f_income').value=r.income||'';$('f_platform').value=r.platform||'';
+  $('f_expense').value=r.expense||'';$('f_note').value=r.note||'';
+  $('formTitle').textContent='修改這一筆';$('saveBtn').textContent='更新';$('cancelBtn').hidden=false;
+  updateBalance();window.scrollTo({top:0,behavior:'smooth'});
+}
+
+async function delRec(id){
+  if(!confirm('確定刪除這一筆？'))return;
+  data=data.filter(r=>r.id!==id);
+  localStorage.setItem('mb_cache',JSON.stringify(data));
+  buildMonths($('month').value);render();
+  try{await saveGist();toast('已刪除並上傳 ✓');}catch(e){toast('已刪本機，上傳失敗：'+e.message,true);}
+}
+
+async function submitForm(){
+  const rec={date:$('f_date').value,income:num($('f_income').value),platform:num($('f_platform').value),expense:num($('f_expense').value),note:$('f_note').value.trim()};
+  if(!rec.date){toast('請先選日期',true);return;}
+  if(editingId){const i=data.findIndex(r=>r.id===editingId);if(i>=0)data[i]={...data[i],...rec};}
+  else{rec.id='r'+Date.now()+Math.floor(Math.random()*1000);data.push(rec);}
+  data.sort((a,b)=>a.date<b.date?-1:1);
+  localStorage.setItem('mb_cache',JSON.stringify(data));
+  const wasEdit=!!editingId;clearForm();buildMonths(monthOf(rec.date));$('month').value=monthOf(rec.date);render();
+  $('saveBtn').disabled=true;
+  try{await saveGist();toast(wasEdit?'已更新並上傳 ✓':'已存檔並上傳 GitHub ✓');}
+  catch(e){toast('已暫存本機，上傳失敗，晚點再開會重試：'+e.message,true);}
+  finally{$('saveBtn').disabled=false;}
+}
+
+function exportCsv(){
+  const m=$('month').value;
+  const rows=data.filter(r=>monthOf(r.date)===m).sort((a,b)=>a.date<b.date?-1:1);
+  let csv='﻿日期,收入,平台,支出,結餘,備註\n';
+  rows.forEach(r=>{const b=num(r.income)-num(r.expense);csv+=[r.date,r.income||'',r.platform||'',r.expense||'',b,(r.note||'').replace(/,/g,'，')].join(',')+'\n';});
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='收支_'+m+'.csv';a.click();
+}
+
+boot();
+</script>
+</body>
+</html>
