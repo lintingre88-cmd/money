@@ -55,6 +55,7 @@
     <input id="tok" type="text" placeholder="貼上 ghp_ 開頭那串" autocomplete="off" autocapitalize="off" spellcheck="false">
     <button class="btn-save" onclick="saveToken()">完成，開始使用</button>
     <p class="muted" style="margin-top:12px">這把鑰匙只存在你這支手機，不會上傳到網頁。你隨時可以到 GitHub 設定裡把它刪掉。</p>
+    <p class="muted" style="margin-top:12px;border-top:1px dashed #d5d8dd;padding-top:12px">👉 <b>已經在別的裝置用過了？</b>不用再產生鑰匙。到那台的 <b>⚙️ → 複製萬用連結</b>，把連結傳到這台打開就自動好了。</p>
   </div>
 </section>
 
@@ -157,7 +158,24 @@ function logout(){
   token='';gistId='';data=[];$('main').hidden=true;$('setup').hidden=false;
 }
 
-function openMenu(){
+function magicLink(){return location.origin+location.pathname+'#k='+encodeURIComponent(token);}
+
+async function copyText(t){
+  try{await navigator.clipboard.writeText(t);return true;}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch(_){}
+    document.body.removeChild(ta);return ok;
+  }
+}
+
+async function openMenu(){
+  if(confirm('複製「萬用連結」？\n\n把它傳到別的手機／電腦打開，就自動設定好、免再貼鑰匙。\n(這條連結裡含你的鑰匙，別貼到公開的地方)')){
+    const ok=await copyText(magicLink());
+    toast(ok?'萬用連結已複製，貼到別的裝置打開即可 ✓':'複製失敗，請長按網址列自行複製',!ok);
+    return;
+  }
   if(confirm('要清除這支手機上的鑰匙、重新設定嗎？\n(你的資料在 GitHub 上不會不見)')) logout();
 }
 
@@ -263,6 +281,16 @@ function exportCsv(){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='收支_'+m+'.csv';a.click();
 }
+
+// 網址帶鑰匙就自動設定：https://.../money/#k=你的鑰匙 —— 換裝置只要打開這條萬用連結
+(function(){
+  const m=location.hash.match(/[#&]k=([^&]+)/);
+  if(m&&m[1]){
+    token=decodeURIComponent(m[1]).trim();
+    localStorage.setItem('mb_token',token);
+    history.replaceState(null,'',location.pathname+location.search); // 把鑰匙從網址列擦掉，防肩窺
+  }
+})();
 
 boot();
 </script>
