@@ -215,12 +215,12 @@ function render(){
   const rows=data.filter(r=>monthOf(r.date)===m).sort((a,b)=>a.date<b.date?-1:1);
   let ti=0,tp=0,te=0;
   rows.forEach(r=>{ti+=num(r.income);tp+=num(r.platform);te+=num(r.expense);});
-  const bal=ti-te;
+  const bal=ti+tp-te;
   $('totals').innerHTML=
     tt('收入合計',money(ti),'pos')+tt('支出合計',money(te),'neg')+
-    tt('平台合計',money(tp),'pos')+tt('結餘 (收入-支出)',money(bal),bal<0?'neg':'pos');
+    tt('平台合計',money(tp),'pos')+tt('結餘 (收入+平台-支出)',money(bal),bal<0?'neg':'pos');
   $('tbody').innerHTML=rows.length?rows.map(r=>{
-    const b=num(r.income)-num(r.expense);
+    const b=num(r.income)+num(r.platform)-num(r.expense);
     const cell=v=>v?money(v):'';
     return '<tr onclick="editRec(\''+r.id+'\')"><td class="day">'+mdOf(r.date)+'</td>'+
       '<td>'+cell(r.income)+'</td><td>'+cell(r.platform)+'</td><td>'+cell(r.expense)+'</td>'+
@@ -229,8 +229,8 @@ function render(){
 }
 function tt(k,v,cls){return '<div class="tot"><div class="k">'+k+'</div><div class="v '+cls+'">'+v+'</div></div>';}
 
-function updateBalance(){$('f_balance').textContent='結餘：'+money(num($('f_income').value)-num($('f_expense').value));}
-document.addEventListener('input',e=>{if(e.target.id==='f_income'||e.target.id==='f_expense')updateBalance();});
+function updateBalance(){$('f_balance').textContent='結餘：'+money(num($('f_income').value)+num($('f_platform').value)-num($('f_expense').value));}
+document.addEventListener('input',e=>{if(e.target.id==='f_income'||e.target.id==='f_platform'||e.target.id==='f_expense')updateBalance();});
 
 function clearForm(){
   editingId=null;
@@ -280,7 +280,7 @@ function exportCsv(){
   const m=$('month').value;
   const rows=data.filter(r=>monthOf(r.date)===m).sort((a,b)=>a.date<b.date?-1:1);
   let csv='﻿日期,收入,平台,支出,結餘,備註\n';
-  rows.forEach(r=>{const b=num(r.income)-num(r.expense);csv+=[r.date,r.income||'',r.platform||'',r.expense||'',b,(r.note||'').replace(/,/g,'，')].join(',')+'\n';});
+  rows.forEach(r=>{const b=num(r.income)+num(r.platform)-num(r.expense);csv+=[r.date,r.income||'',r.platform||'',r.expense||'',b,(r.note||'').replace(/,/g,'，')].join(',')+'\n';});
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='收支_'+m+'.csv';a.click();
 }
